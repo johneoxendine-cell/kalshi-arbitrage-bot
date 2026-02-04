@@ -1,0 +1,62 @@
+version: "3.8"
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kalshi-arb-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ${KALSHI_PRIVATE_KEY_PATH}:/app/keys/private-key.pem:ro
+    environment:
+      - KALSHI_PRIVATE_KEY_PATH=/app/keys/private-key.pem
+      - LOG_FORMAT=json
+    ports:
+      - "8000:8000"  # Prometheus metrics
+    networks:
+      - kalshi-network
+    depends_on:
+      - prometheus
+    command: ["python", "scripts/run_bot.py", "--events", "${WATCH_EVENTS:-DEMO-EVENT}"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: kalshi-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - kalshi-network
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: kalshi-grafana
+    restart: unless-stopped
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - kalshi-network
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+networks:
+  kalshi-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
